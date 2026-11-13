@@ -1,18 +1,83 @@
-# PECO S. — Versión demo
+# PECO S. — Sistema de gestión de ventas y logística
 
-Copia del sistema de gestión pensada para que cualquiera pueda conocer las
-funciones y probarlas **sin base de datos**. Todo se guarda en el
-`localStorage` del navegador de cada visitante: nada sale de su equipo y cada
-uno tiene su propia copia de los datos.
+Sistema de gestión para comercio minorista (indumentaria y calzado) que cubre
+todo el circuito del negocio: ventas en mostrador, stock en varios depósitos,
+caja diaria, cuentas corrientes de clientes, compras a proveedores, tesorería y
+reportes. Funciona **sin conexión a internet** y sincroniza al volver la red.
 
-## Usuarios de prueba
+Este repositorio es una **versión demo** del sistema real: misma interfaz y
+misma lógica de negocio, pero sin servidor. Los datos se guardan en el
+navegador de cada visitante.
 
-| Usuario    | Contraseña | Rol           |
-|------------|------------|---------------|
+### 👉 [Probar la demo en vivo](https://abihdp.github.io/Demo-Sistema-de-venta-y-logistica/)
+
+| Usuario    | Contraseña | Rol |
+|------------|------------|-----|
 | `admin`    | `demo`     | Administrador (todos los permisos) |
 | `vendedor` | `demo`     | Vendedor (ventas, productos, clientes, caja) |
 
-En la pantalla de login se pueden tocar para autocompletar.
+> Tip: primero abrí la caja desde **Caja** para poder registrar ventas.
+> El botón **Restablecer demo** vuelve a los datos de ejemplo.
+
+![Dashboard](docs/screenshots/dashboard.png)
+
+## Funcionalidades
+
+**Ventas**
+- Punto de venta con búsqueda por nombre o código de barras, varias listas de
+  precios y promociones.
+- Pago dividido entre varios medios (efectivo, tarjetas, transferencia,
+  Mercado Pago) y venta a cuenta corriente.
+- Ventas con seña y retiro posterior, reservas de mercadería.
+- Cambios de artículos y anulaciones con notas de crédito/débito.
+
+**Inventario y logística**
+- Productos con variantes (color/talle), rubros y subrubros.
+- Stock por depósito, pases entre depósitos e historial de movimientos.
+- Alertas de stock mínimo y proyección de reposición según ventas.
+- Impresión de etiquetas con código de barras.
+
+**Finanzas**
+- Apertura y cierre de caja con arqueo, retiros y refuerzos.
+- Cuentas corrientes de clientes con límite de crédito y recargo por mora.
+- Compras a proveedores y órdenes de pago.
+- Tesorería: cheques, tarjetas con planes de cuotas e interés, gastos por cuenta.
+- Reportes de balance mensual y ventas por rubro, exportables a Excel.
+
+**Usuarios**
+- Roles y permisos por pantalla, con PIN para autorizar operaciones sensibles.
+
+## Aspectos técnicos destacados
+
+- **Funcionamiento offline-first.** Las operaciones hechas sin conexión se
+  guardan en IndexedDB como una cola (`src/lib/outbox.js`) y se reproducen en
+  orden al volver la red. Cada operación lleva un identificador único
+  (`client_op_id`) para que un reintento nunca la registre dos veces, y un
+  mutex evita que se ejecute en paralelo con su propio reintento.
+- **Varias PCs en simultáneo.** Los cambios se propagan en tiempo real entre
+  computadoras (Supabase Realtime), con control de concurrencia optimista en
+  la caja para que dos puestos no se pisen al abrir, cerrar o retirar.
+- **Demo sin backend.** `src/lib/supabase.js` reemplaza al cliente de
+  Supabase por una implementación propia que imita su API (`select`, `insert`,
+  `upsert`, filtros, `order`, `range`, `rpc`, realtime) sobre `localStorage`.
+  El resto de la aplicación es el mismo código que la versión real, sin
+  modificaciones.
+- **Impresión directa en ticketera** mediante un agente local en .NET
+  (no incluido en la demo).
+
+## Tecnologías
+
+React 19 · Vite · Supabase (PostgreSQL, Auth, Realtime) · IndexedDB (`idb`) ·
+JsBarcode · SheetJS (exportación a Excel) · GitHub Actions + GitHub Pages
+
+## Capturas
+
+| | |
+|---|---|
+| ![Punto de venta](docs/screenshots/ventas.png) | ![Catálogo de productos](docs/screenshots/productos.png) |
+| **Punto de venta** | **Catálogo de productos** |
+| ![Reportes](docs/screenshots/reportes.png) | ![Caja](docs/screenshots/caja.png) |
+| **Reportes** | **Caja del día** |
 
 ## Correr en local
 
@@ -21,35 +86,20 @@ npm install
 npm run dev
 ```
 
-## Publicar
+`npm run build` genera en `dist/` un sitio estático que se puede publicar en
+cualquier hosting. Cada push a `main` lo publica automáticamente en GitHub
+Pages (`.github/workflows/deploy.yml`).
 
-```bash
-npm run build
+## Estructura
+
+```
+src/
+├── components/   # Pantallas por módulo (ventas, caja, productos, ...)
+├── hooks/        # Lógica de datos por entidad (useVentas, useCaja, ...)
+├── lib/          # Cliente de datos, cola offline, conectividad
+├── utils/        # Cálculos de negocio, reportes, tesorería
+└── constants/
 ```
 
-Genera la carpeta `dist/`, que es un sitio estático: se puede subir tal cual a
-Netlify, Vercel, GitHub Pages o cualquier hosting. No hace falta `.env` ni
-servidor.
-
-## Cómo funciona
-
-- `src/lib/supabase.js` reemplaza al cliente de Supabase por uno que imita su
-  API (`from().select/insert/update/upsert/delete`, filtros, `order`, `rpc`,
-  realtime) y guarda cada tabla en `localStorage` bajo `pecos_demo:<tabla>`.
-  El resto de la app no se modificó.
-- `src/lib/demoSeed.js` tiene los datos de ejemplo (productos, stock,
-  clientes, proveedores, plan de cuentas, ~60 días de ventas). Si se cambian,
-  subir `DEMO_VERSION` para que los navegadores que ya abrieron la demo
-  recarguen los datos.
-- El botón **Restablecer demo** (barra superior) borra todos los cambios y
-  vuelve a los datos de ejemplo.
-- Con varias pestañas abiertas, los cambios se sincronizan entre ellas
-  (igual que entre PCs en la versión real).
-
-## Limitaciones
-
-- La impresión directa por ticketera usa el agente local (`localhost:9100`),
-  que no está incluido en la demo.
-- El `localStorage` tiene un límite de ~5 MB por sitio; cargar un logo muy
-  pesado o miles de registros puede llenarlo (la app avisa y se puede
-  restablecer).
+Si se modifican los datos de ejemplo (`src/lib/demoSeed.js`), subir
+`DEMO_VERSION` para que los navegadores que ya abrieron la demo los recarguen.
